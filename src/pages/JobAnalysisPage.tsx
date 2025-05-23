@@ -2,6 +2,7 @@ import React, { useState, useRef, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { JobContext } from '../context/JobContext';
+import axios from 'axios';
 
 const JobAnalysisPage: React.FC = () => {
   const [jobDescription, setJobDescription] = useState('');
@@ -19,7 +20,7 @@ const JobAnalysisPage: React.FC = () => {
         setUploadedFile(file);
         setShowError(false);
         setError(null);
-        
+
         // For demo purposes, we'll just read text files
         if (file.type === 'text/plain') {
           const reader = new FileReader();
@@ -45,49 +46,69 @@ const JobAnalysisPage: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!jobDescription.trim()) {
-      setShowError(true);
-      setError('Veuillez entrer une description de poste ou télécharger un fichier');
-      return;
+  e.preventDefault();
+
+  if (!jobDescription.trim() && !uploadedFile) {
+    setShowError(true);
+    setError('Veuillez entrer une description de poste ou télécharger un fichier');
+    return;
+  }
+
+  setIsAnalyzing(true);
+  setShowError(false);
+
+  try {
+    let response;
+
+    if (uploadedFile) {
+      const formData = new FormData();
+      formData.append('file', uploadedFile);
+
+      response = await axios.post(
+        'http://localhost:8000/api/v1/analysis/analyze-job-offer',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+    } else {
+      response = await axios.post(
+        'http://localhost:8000/api/v1/analysis/analyze-job-offer',
+        { text: jobDescription }
+      );
     }
-    
-    setIsAnalyzing(true);
-    setShowError(false);
-    
-    try {
-      // Simulate API call to analyze job description
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mocked response for demonstration
-      const analyzedJob = {
-        title: 'Développeur Frontend React',
-        company: 'Tech Solutions Inc.',
-        skills: ['React', 'JavaScript', 'TypeScript', 'HTML/CSS', 'Git', 'Tailwind CSS'],
-        experience: '2-3 ans',
-        description: 'Poste de développeur frontend spécialisé dans React et les technologies web modernes.',
-        rawContent: jobDescription
-      };
-      
-      setJobDetails(analyzedJob);
-      setIsAnalyzing(false);
-      navigate('/interview');
-    } catch (err) {
-      setIsAnalyzing(false);
-      setShowError(true);
-      setError('Une erreur est survenue lors de l\'analyse. Veuillez réessayer.');
-    }
-  };
+
+    const data = response.data;
+
+    setJobDetails({
+      title: data.title,
+      company: data.company,
+      skills: data.required_skills,
+      experience: data.experience_level,
+      description: data.description,
+      rawContent: uploadedFile ? `[Fichier ${uploadedFile.name}]` : jobDescription,
+    });
+
+    setIsAnalyzing(false);
+    navigate('/interview');
+  } catch (err) {
+    console.error(err);
+    setIsAnalyzing(false);
+    setShowError(true);
+    setError("Une erreur est survenue lors de l'analyse. Veuillez réessayer.");
+  }
+};
 
   return (
     <div className="container mx-auto px-4 py-12 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-blue-900 mb-6">Analyse de l'offre d'emploi</h1>
-        
+
         <div className="bg-white rounded-xl shadow-md p-6 sm:p-8 mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Soumettez votre offre d'emploi</h2>
-          
+
           <form onSubmit={handleSubmit}>
             {/* Text area for job description */}
             <div className="mb-6">
@@ -103,7 +124,7 @@ const JobAnalysisPage: React.FC = () => {
                 onChange={(e) => setJobDescription(e.target.value)}
               />
             </div>
-            
+
             {/* File upload */}
             <div className="mb-6">
               <div className="text-sm text-gray-700 mb-2">Ou téléchargez un fichier</div>
@@ -130,7 +151,7 @@ const JobAnalysisPage: React.FC = () => {
               </div>
               <p className="text-xs text-gray-500 mt-2">Formats supportés : .txt, .pdf</p>
             </div>
-            
+
             {/* Error message */}
             {showError && error && (
               <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
@@ -138,7 +159,7 @@ const JobAnalysisPage: React.FC = () => {
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
-            
+
             {/* Submit button */}
             <button
               type="submit"
@@ -156,7 +177,7 @@ const JobAnalysisPage: React.FC = () => {
             </button>
           </form>
         </div>
-        
+
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-blue-800">
           <p className="font-medium mb-1">Comment ça marche</p>
           <p>Notre IA va analyser l'offre d'emploi pour extraire les informations clés comme le titre du poste, les compétences requises et le niveau d'expérience. Ces informations seront utilisées pour générer un entretien personnalisé.</p>
